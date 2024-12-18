@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        *, *::before, *::after{
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            inset: 0;
+        }
+
+        body{
+            font-family: system-ui;
+        }
+
+        img{
+            max-width: 350px;
+            aspect-ratio: 1/1;
+            object-fit: contain;
+        }
+
+        button, input, td, th {
+            padding: .5em;
+        }
+
+        main{
+            min-height: 100vh;
+            display: grid;
+            place-content: center;
+
+        }
+
+        dialog{
+            margin: auto;
+            padding: 1em;
+
+            > #answersContainer{
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+            }
+
+            > #scoreBoard{
+                max-height: 500px;
+            }
+        }
+
+        #startDialog{
+            > div{
+                display: flex;
+                gap: 5px;
+            }
+        }
+        
+    </style>
+</head>
+<body>
+    <dialog id="startDialog" open>
+        <div>
+            <form method="dialog" onsubmit="gameStart()">
+                <input id="inputName" type="text" required>
+                <input type="submit" value="Start Game">
+            </form>
+            <button onclick="openScoreBoard()">Top Scores</button>
+        </div>
+    </dialog>
+    <dialog id="gameDialog">
+        <h1>Question: <span id="questionText">1</span></h1>
+        <img id="gameImage" alt="image">
+        <div id="answersContainer">
+        </div>
+    </dialog>
+    <dialog id="endDialog">
+        <h1 id="finalScore"></h1>
+        <button onclick="location.reload()">Try Again</button>
+    </dialog>
+    <dialog id="scoreBoard">
+        <div style="overflow-y: scroll; max-height: 300px;">
+            <table border="1">
+            </table>
+        </div>
+        <button onclick="location.reload()">Close</button>
+    </dialog>
+    
+    <script>
+        let fruits;
+        let questionNumber = -1;
+        let currentFruit;
+        let score = 0;
+
+        let startCount;
+        let stopCount;
+        let finalCount;
+        
+        async function refresh(){
+            let response = await fetch("http://localhost/myquizzer2/api/get-fruits.php");
+            fruits = await response.json();
+            console.log(fruits);
+
+            fruits.sort(() => Math.random() - 0.5);
+            nextQuestion();
+        }
+
+        function gameStart(){
+            startDialog.close();
+            gameDialog.open = open;
+
+            startCount = event.timeStamp / 1000;
+            startCount.toFixed(2);
+            console.log("start:", startCount.toFixed(2));
+        }
+        
+
+        function gameEnd(){
+            gameDialog.close();
+            endDialog.open = open;
+
+
+            finalScore.innerHTML = `Your score: ${score} / ${fruits.length}`;
+
+            
+            endCount = event.timeStamp / 1000;
+            endCount.toFixed(2);
+            finalCount = endCount - startCount;
+            
+            fetch(`http://localhost/myquizzer2/api/save-scores.php?name=${inputName.value}&score=${score}&time=${finalCount.toFixed(2)}`);
+        }
+
+        function nextQuestion(id){
+
+            questionNumber++;
+            if(questionNumber >= fruits.length){
+                gameEnd();
+                return;
+            }
+
+            questionText.innerHTML = questionNumber + 1;
+            
+            currentFruit = fruits.at(questionNumber);
+            gameImage.src = `./images/${currentFruit.name}.png`;
+
+            console.log(currentFruit);
+
+
+            generateAnswers();
+        }
+
+        function generateAnswers(){
+            let answers = Array.from(fruits);
+            answers.splice(4);
+
+            if(!answers.includes(currentFruit)){
+                answers.pop();
+                answers.push(currentFruit);
+            }
+            
+            answers.sort(() => Math.random() - 0.5);
+            answersContainer.innerHTML = '';
+            
+            for (const answer of answers) {
+                answersContainer.innerHTML += `
+                    <button onclick="checkAnswer(${answer.id})">${answer.name}</button>
+                `;
+            }
+            console.log(answers);
+        }
+
+        function checkAnswer(id){
+            if(currentFruit.id == id){
+                score++;
+                console.log('tama', 'score:', score);
+            }
+            nextQuestion();
+        }
+
+        async function openScoreBoard(){
+            startDialog.close();
+            scoreBoard.open = open;     
+            
+            let response = await fetch("http://localhost/myquizzer2/api/get-scores.php"); 
+            let scores = await response.json();
+
+            const table = document.querySelector("table");
+
+            for (const score of scores) {
+                table.innerHTML += `
+                <tr>
+                    <th>NAME</th>
+                    <th>SCORE</th>
+                    <th>DATE</th>
+                    <th>TIME</th>
+                </tr>
+                <tr>
+                    <td>${score.name}</td>
+                    <td>${score.score}</td>
+                    <td>${score.date}</td>
+                    <td>${score.time}</td>
+                </tr>
+            `;    
+            }
+            
+        }
+
+
+        refresh();
+    </script>
+</body>
+</html>
